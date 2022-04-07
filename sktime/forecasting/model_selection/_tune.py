@@ -7,6 +7,7 @@ __author__ = ["mloning"]
 __all__ = ["ForecastingGridSearchCV", "ForecastingRandomizedSearchCV"]
 
 import pandas as pd
+import numpy as np
 from joblib import Parallel, delayed
 from sklearn.base import clone
 from sklearn.model_selection import ParameterGrid, ParameterSampler, check_cv
@@ -40,6 +41,7 @@ class BaseGridSearch(BaseForecaster):
         scoring=None,
         verbose=0,
         return_n_best_forecasters=1,
+        error_score=np.nan,
     ):
 
         self.forecaster = forecaster
@@ -52,6 +54,7 @@ class BaseGridSearch(BaseForecaster):
         self.scoring = scoring
         self.verbose = verbose
         self.return_n_best_forecasters = return_n_best_forecasters
+        self.error_score = error_score
         super(BaseGridSearch, self).__init__()
         tags_to_clone = [
             "requires-fh-in-fit",
@@ -212,6 +215,7 @@ class BaseGridSearch(BaseForecaster):
                 X,
                 strategy=self.strategy,
                 scoring=scoring,
+                error_score=self.error_score,
             )
 
             # Filter columns.
@@ -288,7 +292,13 @@ class BaseGridSearch(BaseForecaster):
             forecaster = clone(self.forecaster).set_params(**params)
             # Refit model with best parameters.
             if self.refit:
-                forecaster.fit(y, X, fh)
+                try:
+                    forecaster.fit(y, X, fh)
+                except Exception as e:
+                    if self.error_score == "raise":
+                        raise e
+                    else:
+                        forecaster = None
             self.n_best_forecasters_.append((rank, forecaster))
             # Save score
             score = results[f"mean_{scoring_name}"].iloc[i]
@@ -333,8 +343,9 @@ class ForecastingGridSearchCV(BaseGridSearch):
         In case the n best forecaster should be returned, this value can be set
         and the n best forecasters will be assigned to n_best_forecasters_
     pre_dispatch: str, optional (default='2*n_jobs')
-    error_score: numeric value or the str 'raise', optional (default=np.nan)
+    error_score: numeric value or the str 'raise' or np.nan, optional (default=np.nan)
         The test score returned when a forecaster fails to be fitted.
+        If "raise", exception is raised.
     return_train_score: bool, optional (default=False)
     backend: str, optional (default="loky")
         Specify the parallelisation backend implementation in joblib, where
@@ -443,6 +454,7 @@ class ForecastingGridSearchCV(BaseGridSearch):
         return_n_best_forecasters=1,
         pre_dispatch="2*n_jobs",
         backend="loky",
+        error_score=np.nan,
     ):
         super(ForecastingGridSearchCV, self).__init__(
             forecaster=forecaster,
@@ -455,6 +467,7 @@ class ForecastingGridSearchCV(BaseGridSearch):
             return_n_best_forecasters=return_n_best_forecasters,
             pre_dispatch=pre_dispatch,
             backend=backend,
+            error_score=error_score,
         )
         self.param_grid = param_grid
 
