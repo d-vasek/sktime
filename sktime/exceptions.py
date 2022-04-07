@@ -12,6 +12,12 @@ class NotEvaluatedError(ValueError, AttributeError):
     """
 
 
+class NoValidForecasterFitted(ValueError, AttributeError):
+    """Exception class to raise if grid search cross validation did not find any model-param combination
+    that was successfully fitted
+    """
+
+
 class NotFittedError(ValueError, AttributeError):
     """Exception class to raise if estimator is used before fitting.
     This class inherits from both ValueError and AttributeError to help with
