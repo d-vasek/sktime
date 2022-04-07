@@ -30,6 +30,7 @@ def evaluate(
     strategy="refit",
     scoring=None,
     return_data=False,
+    error_score=np.nan,
 ):
     """Evaluate forecaster using timeseries cross-validation.
 
@@ -91,6 +92,9 @@ def evaluate(
     # Initialize dataframe.
     results = pd.DataFrame()
 
+    # Param for checking whether the fitting was successful
+    fit_failed = False
+
     # Run temporal cross-validation.
     for i, (train, test) in enumerate(cv.split(y)):
         # split data
@@ -103,10 +107,23 @@ def evaluate(
         start_fit = time.perf_counter()
         if i == 0 or strategy == "refit":
             forecaster = clone(forecaster)
-            forecaster.fit(y_train, X_train, fh=fh)
+            try:
+                forecaster.fit(y_train, X_train, fh=fh)
+            except Exception as e:
+                if error_score == "raise":
+                    raise e
+                else:
+                    fit_failed = True
 
         else:  # if strategy == "update":
-            forecaster.update(y_train, X_train)
+            try:
+                forecaster.update(y_train, X_train)
+            except Exception as e:
+                if error_score == "raise":
+                    raise e
+                else:
+                    fit_failed = True
+
         fit_time = time.perf_counter() - start_fit
 
         pred_type = {
@@ -128,16 +145,22 @@ def evaluate(
             scitype = None
             metric_args = {}
 
-        y_pred = eval(pred_type[scitype])(
-            fh,
-            X_test,
-            **metric_args,
-        )
+        if fit_failed:
+            y_pred = None
+        else:
+            y_pred = eval(pred_type[scitype])(
+                fh,
+                X_test,
+                **metric_args,
+            )
 
         pred_time = time.perf_counter() - start_pred
 
         # score
-        score = scoring(y_test, y_pred, y_train=y_train)
+        if fit_failed:
+            score = error_score
+        else:
+            score = scoring(y_test, y_pred, y_train=y_train)
 
         # save results
         results = results.append(
@@ -146,7 +169,7 @@ def evaluate(
                 "fit_time": fit_time,
                 "pred_time": pred_time,
                 "len_train_window": len(y_train),
-                "cutoff": forecaster.cutoff,
+                "cutoff": forecaster.cutoff if forecaster.cutoff else np.nan,
                 "y_train": y_train if return_data else np.nan,
                 "y_test": y_test if return_data else np.nan,
                 "y_pred": y_pred if return_data else np.nan,
