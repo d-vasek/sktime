@@ -175,14 +175,17 @@ class BaseForecaster(BaseEstimator):
         vectorization_needed = isinstance(y_inner, VectorizedDF)
         self._is_vectorized = vectorization_needed
         # we call the ordinary _fit if no looping/vectorization needed
-        if not vectorization_needed:
-            self._fit(y=y_inner, X=X_inner, fh=fh)
-        else:
-            # otherwise we call the vectorized version of fit
-            self._vectorize("fit", y=y_inner, X=X_inner, fh=fh)
+        try:
+            if not vectorization_needed:
+                self._fit(y=y_inner, X=X_inner, fh=fh)
+            else:
+                # otherwise we call the vectorized version of fit
+                self._vectorize("fit", y=y_inner, X=X_inner, fh=fh)
 
-        # this should happen last
-        self._is_fitted = True
+            # this should happen last
+            self._is_fitted = True
+        except:
+            self._is_fitted = False
 
         return self
 
