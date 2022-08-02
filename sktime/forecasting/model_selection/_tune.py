@@ -206,27 +206,34 @@ class BaseGridSearch(BaseForecaster):
 
             # Set parameters.
             forecaster.set_params(**params)
+            try:
+                # Evaluate.
+                out = evaluate(
+                    forecaster,
+                    cv,
+                    y,
+                    X,
+                    strategy=self.strategy,
+                    scoring=scoring,
+                    error_score=self.error_score,
+                )
 
-            # Evaluate.
-            out = evaluate(
-                forecaster,
-                cv,
-                y,
-                X,
-                strategy=self.strategy,
-                scoring=scoring,
-                error_score=self.error_score,
-            )
+                # Filter columns.
+                out = out.filter(items=[scoring_name, "fit_time", "pred_time"], axis=1)
 
-            # Filter columns.
-            out = out.filter(items=[scoring_name, "fit_time", "pred_time"], axis=1)
+                # Aggregate results.
+                out = out.mean()
+                out = out.add_prefix("mean_")
 
-            # Aggregate results.
-            out = out.mean()
-            out = out.add_prefix("mean_")
+                # Add parameters to output table.
+                out["params"] = params
 
-            # Add parameters to output table.
-            out["params"] = params
+            except:
+                out = pd.Series(index=[f"mean_test_{self.scoring.name}",
+                                       "mean_fit_time",
+                                       "mean_pred_time",
+                                       "params"],
+                                data=[999999999, 0, 0, params])
 
             return out
 
